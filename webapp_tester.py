@@ -2,7 +2,7 @@
 """
 LMS Playwright Tester
 run:
-python3 webapp-tester.py --url https://iqralms.com --email admin@ailms.com --password Admin@123456
+python3 webapp_tester.py --url https://iqralms.com --email admin@ailms.com --password Admin@123456
 """
 
 import asyncio
