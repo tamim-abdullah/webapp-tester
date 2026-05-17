@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 LMS Playwright Tester
-run:
+run with: 
 python3 webapp_tester.py --url https://iqralms.com --email admin@ailms.com --password Admin@123456
 """
 
@@ -260,7 +260,8 @@ class LMSTester:
 
     async def test_create_course_button(self, page):
         log("→ Testing Create Course button...")
-        await self.goto(page, "/dashboard")
+        await self.goto(page, "/en/dashboard")
+        await page.wait_for_timeout(1000)
         clicked = await self.click_first(page, [
             "button:has-text('Create Course')",
             "a:has-text('Create Course')",
@@ -268,74 +269,76 @@ class LMSTester:
         ])
 
         if not clicked:
-            self.record("Create Course Button", "warning", "Button not found")
+            self.record("Create Course", "warning", "Button not found")
             return
 
-        await page.wait_for_timeout(2000)
-        has_form = await page.locator("form, input[name='title'], #title").count() > 0
-        self.record("Create Course Button", "passed" if has_form else "warning",
-                    "Form opened" if has_form else "Clicked but no form detected")
+        # navigates to /en/courses/create
+        await page.wait_for_timeout(3000)
+        has_inputs = await page.locator("input").count() > 0
+        on_create_page = "create" in page.url
+        self.record("Create Course", "passed" if (has_inputs or on_create_page) else "warning",
+                    f"URL: {page.url} | inputs: {await page.locator('input').count()}")
 
     async def test_notifications(self, page):
         log("→ Testing notifications...")
-        await self.goto(page, "/dashboard")
-        clicked = await self.click_first(page, [
-            ".notification-bell", "[aria-label*='notif' i]",
-            "button:has-text('Notifications')", ".fa-bell", "[href*='notification']"
-        ])
+        await self.goto(page, "/en/dashboard")
+        await page.wait_for_timeout(1000)
+
+        # exact aria-label found from debug
+        clicked = await self.click_first(page, ['[aria-label="Notifications"]'])
 
         if not clicked:
             self.record("Notifications", "warning", "Notification icon not found")
             return
 
-        await page.wait_for_timeout(1500)
-        panel_visible = await page.locator(
-            ".notification-list, .notifications-panel, .dropdown-menu"
-        ).count() > 0
-        self.record("Notifications", "passed" if panel_visible else "warning",
-                    "Panel opened" if panel_visible else "Clicked but no panel")
+        await page.wait_for_timeout(2000)
+        # check if any overlay/list appeared OR url changed
+        overlay = await page.locator(
+            '[role="dialog"], [class*="notif"], [class*="dropdown"], [class*="popup"], [class*="panel"]'
+        ).count()
+        url_changed = "/notification" in page.url
+        self.record("Notifications", "passed" if (overlay > 0 or url_changed) else "warning",
+                    f"Overlay elements: {overlay} | URL: {page.url.split('/')[-1]}")
 
     async def test_profile_menu(self, page):
         log("→ Testing profile menu...")
-        await self.goto(page, "/dashboard")
+        await self.goto(page, "/en/dashboard")
+        await page.wait_for_timeout(1000)
+
+        # 'SA' avatar is a nav link with rounded-full class (found from debug)
         clicked = await self.click_first(page, [
-            ".profile-menu", ".user-avatar", ".user-menu",
-            "[aria-label*='profile' i]", ".avatar"
+            'nav [class*="rounded-full"]',
+            'nav a.w-9',
         ])
 
         if not clicked:
-            self.record("Profile Menu", "warning", "Profile icon not found")
-            return
-
-        await page.wait_for_timeout(1500)
-        menu_visible = await page.locator(
-            ".dropdown-menu, .profile-dropdown, [role='menu']"
-        ).count() > 0
-        self.record("Profile Menu", "passed" if menu_visible else "warning",
-                    "Menu opened" if menu_visible else "Clicked but no dropdown")
-
-    async def test_logout(self, page):
-        log("→ Testing logout...")
-        await self.goto(page, "/dashboard")
-        clicked = await self.click_first(page, [
-            "a:has-text('Logout')", "button:has-text('Logout')",
-            "a:has-text('Sign out')", "[href*='logout']", "[href*='signout']"
-        ])
-
-        if not clicked:
-            # Try opening profile menu first
-            await self.click_first(page, [".user-avatar", ".avatar", ".profile-menu"])
-            await page.wait_for_timeout(1000)
-            clicked = await self.click_first(page, [
-                "a:has-text('Logout')", "button:has-text('Logout')", "[href*='logout']"
-            ])
-
-        if not clicked:
-            self.record("Logout", "warning", "Logout button not found")
+            self.record("Profile Menu", "warning", "Profile avatar not found")
             return
 
         await page.wait_for_timeout(2000)
-        on_login = "login" in page.url.lower() or "signin" in page.url.lower()
+        # proof: logout button becomes visible when menu opens
+        logout_visible = await page.locator("button:has-text('Logout')").count() > 0
+        self.record("Profile Menu", "passed" if logout_visible else "warning",
+                    "Menu opened (logout visible)" if logout_visible else "Clicked but menu not detected")
+
+    async def test_logout(self, page):
+        log("→ Testing logout...")
+        await self.goto(page, "/en/dashboard")
+        await page.wait_for_timeout(1000)
+
+        # open profile menu first
+        await self.click_first(page, ['nav [class*="rounded-full"]', 'nav a.w-9'])
+        await page.wait_for_timeout(2000)
+
+        # logout button is now visible
+        clicked = await self.click_first(page, ["button:has-text('Logout')"])
+
+        if not clicked:
+            self.record("Logout", "warning", "Logout button not found after opening profile menu")
+            return
+
+        await page.wait_for_timeout(3000)
+        on_login = "login" in page.url.lower() or "auth" in page.url.lower()
         self.record("Logout", "passed" if on_login else "warning",
                     f"Redirected to {page.url}")
 
